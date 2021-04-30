@@ -1,6 +1,7 @@
 def main(ctx):
   data = list([
-		dict(name="talosctl", versions=["v0.9.1", "v0.10.1"], repo="https://github.com/talos-systems/talos", build="cd cmd/talosctl ; go build", image="golang:latest", binary='src/cmd/talosctl/talosctl')
+		dict(name="talosctl", versions=["v0.9.1"], repo="https://github.com/talos-systems/talos", build="cd cmd/talosctl ; go build", image="golang:latest", binary='cmd/talosctl/talosctl'),
+		dict(name="helm", versions=["v3.5.4"], repo="https://github.com/helm/helm", build="make", image="golang:latest", binary='bin/helm')
 ])
   
   steps = list()
@@ -24,6 +25,33 @@ def step(data, version):
             "cd src",
             "%s" % data["build"],
         ]
+      },
+      {
+        "name": "package",
+        "image": "lib42/fpm:latest",
+        "commands": [
+          "mkdir -p out",
+          "fpm -s dir -t deb -n %s -v %s -p out src/%s=/usr/bin/" % (data["name"], version, data["binary"]),
+          "fpm -s dir -t rpm -n %s -v %s -p out src/%s=/usr/bin/" % (data["name"], version, data["binary"])
+        ]
+      },
+			{
+        "name": "upload",
+        "image": "plugins/s3",
+        "settings": {
+          "bucket": "drone-bucket",
+          "source": "out/*",
+          "target": "/packages/",
+          "path_style": True,
+          "strip_prefix": True,
+          "endpoint": "http://minio.minio.svc.cluster.local:9000",
+          "access_key": {
+             "from_secret": "access_key"
+           },
+          "secret_key": {
+             "from_secret": "secret_key"
+           }
+			  }
       }
     ]
   }
